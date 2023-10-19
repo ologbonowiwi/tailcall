@@ -24,7 +24,7 @@ async fn graphql_request(req: Request<Body>, server_ctx: &ServerContext) -> Resu
   let allowed = upstream.get_allowed_headers();
   let headers = create_allowed_headers(req.headers(), &allowed);
   let bytes = hyper::body::to_bytes(req.into_body()).await?;
-  let request: async_graphql_hyper::GraphQLRequest = serde_json::from_slice(&bytes)?;
+  let request: async_graphql_hyper::GraphQLBatchRequest = serde_json::from_slice(&bytes)?;
   let req_ctx = Arc::new(RequestContext::from(server_ctx).req_headers(headers));
   let mut response = request.data(req_ctx.clone()).execute(&server_ctx.schema).await;
 
