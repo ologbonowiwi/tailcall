@@ -24,9 +24,18 @@ async fn graphql_request(req: Request<Body>, server_ctx: &ServerContext) -> Resu
   let allowed = upstream.get_allowed_headers();
   let headers = create_allowed_headers(req.headers(), &allowed);
   let bytes = hyper::body::to_bytes(req.into_body()).await?;
-  let request: async_graphql_hyper::GraphQLBatchRequest = serde_json::from_slice(&bytes)?;
   let req_ctx = Arc::new(RequestContext::from(server_ctx).req_headers(headers));
-  let mut response = request.data(req_ctx.clone()).execute(&server_ctx.schema).await;
+
+  let mut response = match server_ctx.blueprint.server.enable_batch_requests {
+    true => {
+      let request: async_graphql_hyper::GraphQLBatchRequest = serde_json::from_slice(&bytes)?;
+      request.data(req_ctx.clone()).execute(&server_ctx.schema).await
+    }
+    false => {
+      let request: async_graphql_hyper::GraphQLRequest = serde_json::from_slice(&bytes)?;
+      request.data(req_ctx.clone()).execute(&server_ctx.schema).await
+    }
+  };
 
   if server_ctx.blueprint.server.enable_cache_control_header {
     if let Some(ttl) = req_ctx.get_min_max_age() {
