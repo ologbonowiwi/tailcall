@@ -19,10 +19,11 @@ where
 {
   pub client: C,
   pub batched: Option<GroupBy>,
+  pub is_list: bool,
 }
 impl<C: HttpClient + Send + Sync + 'static + Clone> HttpDataLoader<C> {
-  pub fn new(client: C, batched: Option<GroupBy>) -> Self {
-    HttpDataLoader { client, batched }
+  pub fn new(client: C, batched: Option<GroupBy>, is_list: bool) -> Self {
+    HttpDataLoader { client, batched, is_list }
   }
 
   pub fn to_data_loader(self, batch: Batch) -> DataLoader<HttpDataLoader<C>, NoCache> {
@@ -66,17 +67,21 @@ impl<C: HttpClient + Send + Sync + 'static + Clone> Loader<DataLoaderRequest> fo
         let id = query_set
           .get(group_by.key())
           .ok_or(anyhow::anyhow!("Unable to find key {} in query params", group_by.key()))?;
-        hashmap.insert(
-          key.clone(),
-          res.clone().body(
-            body_value
-              .get(id.as_ref())
-              .and_then(|a| a.first().cloned().cloned())
-              .unwrap_or(ConstValue::Null),
-          ),
-        );
+        let body_value_for_req = if self.is_list {
+          ConstValue::List(
+            body_value.get(id.as_ref())
+              .unwrap_or(&Vec::new())
+              .iter()
+              .map(|&o| o.to_owned())
+              .collect::<Vec<_>>(),
+          )
+        } else {
+          body_value.get(id.as_ref())
+            .and_then(|a| a.first().cloned().cloned())
+            .unwrap_or(ConstValue::Null)
+        };
+        hashmap.insert(key.clone(), res.clone().body(body_value_for_req));
       }
-
       Ok(hashmap)
     } else {
       let results = keys.iter().map(|key| async {
@@ -99,6 +104,8 @@ impl<C: HttpClient + Send + Sync + 'static + Clone> Loader<DataLoaderRequest> fo
 
 #[cfg(test)]
 mod tests {
+  use std::sync::{Arc, Mutex};
+
   use std::collections::BTreeSet;
   use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -109,21 +116,24 @@ mod tests {
   struct MockHttpClient {
     // To keep track of number of times execute is called
     request_count: Arc<AtomicUsize>,
+    // Keep track of the requests received
+    requests: Arc<Mutex<Vec<reqwest::Request>>>,
   }
 
   #[async_trait::async_trait]
   impl HttpClient for MockHttpClient {
-    async fn execute(&self, _req: reqwest::Request) -> anyhow::Result<Response> {
+    async fn execute(&self, req: reqwest::Request) -> anyhow::Result<Response> {
       self.request_count.fetch_add(1, Ordering::SeqCst);
+      self.requests.lock().unwrap().push(req.try_clone().unwrap());
       // You can mock the actual response as per your need
       Ok(Response::default())
     }
   }
   #[tokio::test]
   async fn test_load_function() {
-    let client = MockHttpClient { request_count: Arc::new(AtomicUsize::new(0)) };
+    let client = MockHttpClient { request_count: Arc::new(AtomicUsize::new(0)), requests: Arc:: new(Mutex::new(Vec::new()))};
 
-    let loader = HttpDataLoader { client: client.clone(), batched: None };
+    let loader = HttpDataLoader { client: client.clone(), batched: None, is_list: false };
     let loader = loader.to_data_loader(Batch::default().delay(1));
 
     let request = reqwest::Request::new(reqwest::Method::GET, "http://example.com".parse().unwrap());
@@ -139,9 +149,9 @@ mod tests {
   }
   #[tokio::test]
   async fn test_load_function_many() {
-    let client = MockHttpClient { request_count: Arc::new(AtomicUsize::new(0)) };
+    let client = MockHttpClient { request_count: Arc::new(AtomicUsize::new(0)), requests: Arc:: new(Mutex::new(Vec::new())) };
 
-    let loader = HttpDataLoader { client: client.clone(), batched: None };
+    let loader = HttpDataLoader { client: client.clone(), batched: None, is_list: false };
     let loader = loader.to_data_loader(Batch::default().delay(1));
 
     let request1 = reqwest::Request::new(reqwest::Method::GET, "http://example.com/1".parse().unwrap());
@@ -159,4 +169,52 @@ mod tests {
       "Only two requests should be made for two unique keys"
     );
   }
+
+  #[tokio::test]
+  async fn test_group_by() {
+    let client = MockHttpClient { request_count: Arc::new(AtomicUsize::new(0)), requests: Arc:: new(Mutex::new(Vec::new())) };
+
+    let loader = HttpDataLoader { client: client.clone(), batched: Some(GroupBy::new(vec!["userId".to_string()])), is_list: false };
+    let loader = loader.to_data_loader(Batch::default().delay(1));
+
+    let request1 = reqwest::Request::new(reqwest::Method::GET, "http://example.com?userId=1".parse().unwrap());
+    let request2 = reqwest::Request::new(reqwest::Method::GET, "http://example.com?userId=2".parse().unwrap());
+    let headers = BTreeSet::new();
+    let key1 = DataLoaderRequest::new(request1, headers.clone());
+    let key2 = DataLoaderRequest::new(request2, headers);
+    let future1 = loader.load_one(key1);
+    let future2 = loader.load_one(key2);
+    let _ = join_all([future1, future2]).await;
+    assert_eq!(
+      client.request_count.load(Ordering::SeqCst),
+      1,
+      "Only one request should be sent if grouped"
+    );
+    assert_eq!(client.requests.lock().unwrap().get(0).unwrap().url().to_string(), "http://example.com/?userId=1&userId=2");
+  }
+  
+  #[tokio::test]
+  async fn test_batch_size_with_group_by() {
+    let client = MockHttpClient { request_count: Arc::new(AtomicUsize::new(0)), requests: Arc:: new(Mutex::new(Vec::new())) };
+
+    let loader = HttpDataLoader { client: client.clone(), batched: Some(GroupBy::new(vec!["userId".to_string()])), is_list: false };
+    let loader = loader.to_data_loader(Batch::default().delay(1).max_size(1));
+
+    let request1 = reqwest::Request::new(reqwest::Method::GET, "http://example.com?userId=1".parse().unwrap());
+    let request2 = reqwest::Request::new(reqwest::Method::GET, "http://example.com?userId=2".parse().unwrap());
+    let headers = BTreeSet::new();
+    let key1 = DataLoaderRequest::new(request1, headers.clone());
+    let key2 = DataLoaderRequest::new(request2, headers);
+    let future1 = loader.load_one(key1);
+    let future2 = loader.load_one(key2);
+    let _ = join_all([future1, future2]).await;
+    assert_eq!(
+      client.request_count.load(Ordering::SeqCst),
+      2,
+      "Two requests should be sent if batch size = 1"
+    );
+    assert_eq!(client.requests.lock().unwrap().get(0).unwrap().url().to_string(), "http://example.com/?userId=1");
+    assert_eq!(client.requests.lock().unwrap().get(1).unwrap().url().to_string(), "http://example.com/?userId=2");
+  }
+
 }
