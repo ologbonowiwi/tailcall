@@ -298,7 +298,7 @@ mod tests {
     let response = join_all([future1, future2]).await;
     assert!(matches!(
       response
-        .get(0)
+        .first()
         .unwrap()
         .as_ref()
         .unwrap()
@@ -340,7 +340,7 @@ mod tests {
     let response = join_all([future1, future2]).await;
     assert!(matches!(
       response
-        .get(0)
+        .first()
         .unwrap()
         .as_ref()
         .unwrap()
