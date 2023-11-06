@@ -96,6 +96,7 @@ pub async fn start_server(config: Config) -> Result<()> {
 
 #[async_trait::async_trait]
 pub trait RequestExecutor {
+  #[allow(clippy::too_many_arguments)]
   async fn execute(
     &self,
     bytes: &hyper::body::Bytes,

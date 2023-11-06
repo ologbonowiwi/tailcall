@@ -7,7 +7,9 @@ mod integration_tests {
       .post("http://localhost:8000/graphql")
       .header("Content-Type", "application/json")
       .body(body)
-      .send().await.expect("Failed to send request")
+      .send()
+      .await
+      .expect("Failed to send request")
   }
 
   async fn initiate_test_server(mock_schema_path: String) -> &'static str {
@@ -46,7 +48,7 @@ mod integration_tests {
 
     let query1 = json!({"query": "query { post(id: 1) { title } }"});
     let query2 = json!({"query": "query { post(id: 2) { title } }"});
-    
+
     let batched_query = format!("[{},{}]", query1, query2);
     let response = make_request(http_client.clone(), batched_query).await;
     let json = response.json::<Vec<Resp>>().await.unwrap();
@@ -60,7 +62,9 @@ mod integration_tests {
     let unbatched_query = format!("{}", query1);
     let response = make_request(http_client, unbatched_query).await;
     let json = response.json::<Resp>().await.unwrap();
-    assert_eq!(json.data.post.title, "sunt aut facere repellat provident occaecati excepturi optio reprehenderit");
+    assert_eq!(
+      json.data.post.title,
+      "sunt aut facere repellat provident occaecati excepturi optio reprehenderit"
+    );
   }
 }
-
