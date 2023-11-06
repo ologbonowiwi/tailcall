@@ -203,7 +203,7 @@ mod tests {
       "Only one request should be sent if grouped"
     );
     assert_eq!(
-      client.requests.lock().unwrap().get(0).unwrap().url().to_string(),
+      client.requests.lock().unwrap().first().unwrap().url().to_string(),
       "http://example.com/?userId=1&userId=2"
     );
   }
@@ -230,7 +230,7 @@ mod tests {
       "Two requests should be sent if batch size = 1"
     );
     assert_eq!(
-      client.requests.lock().unwrap().get(0).unwrap().url().to_string(),
+      client.requests.lock().unwrap().first().unwrap().url().to_string(),
       "http://example.com/?userId=1"
     );
     assert_eq!(
