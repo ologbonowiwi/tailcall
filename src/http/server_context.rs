@@ -20,13 +20,12 @@ fn assign_data_loaders(blueprint: &mut Blueprint, http_client: DefaultHttpClient
     if let Definition::ObjectTypeDefinition(def) = def {
       for field in &mut def.fields {
         if let Some(Expression::Unsafe(Unsafe::Http(req_template, group_by, _))) = &mut field.resolver {
-          let is_list = if let ListType { .. } = &field.of_type {
-            true
-          } else {
-            false
-          };
-          let data_loader = HttpDataLoader::new(http_client.clone(), group_by.clone(), is_list)
-            .to_data_loader(blueprint.upstream.batch.clone().unwrap_or_default());
+          let data_loader = HttpDataLoader::new(
+            http_client.clone(),
+            group_by.clone(),
+            matches!(&field.of_type, ListType { .. }),
+          )
+          .to_data_loader(blueprint.upstream.batch.clone().unwrap_or_default());
           field.resolver = Some(Expression::Unsafe(Unsafe::Http(
             req_template.clone(),
             group_by.clone(),

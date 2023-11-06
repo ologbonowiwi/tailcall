@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,18 +13,37 @@ use crate::config::Batch;
 use crate::http::{DataLoaderRequest, HttpClient, Response};
 use crate::json::JsonLike;
 
-#[derive(Default, Clone, Debug)]
+#[derive(Clone)]
 pub struct HttpDataLoader<C>
 where
   C: HttpClient + Send + Sync + 'static + Clone,
 {
   pub client: C,
   pub batched: Option<GroupBy>,
-  pub is_list: bool,
+  #[allow(clippy::type_complexity)]
+  pub get_body_value: Arc<dyn Fn(HashMap<String, Vec<&ConstValue>>, &Cow<str>) -> ConstValue + Send + Sync>,
 }
 impl<C: HttpClient + Send + Sync + 'static + Clone> HttpDataLoader<C> {
   pub fn new(client: C, batched: Option<GroupBy>, is_list: bool) -> Self {
-    HttpDataLoader { client, batched, is_list }
+    let get_body_value: fn(HashMap<String, Vec<&ConstValue>>, &Cow<str>) -> ConstValue = match is_list {
+      true => |body_value: HashMap<String, Vec<&ConstValue>>, id: &Cow<str>| {
+        ConstValue::List(
+          body_value
+            .get(id.as_ref())
+            .unwrap_or(&Vec::new())
+            .iter()
+            .map(|&o| o.to_owned())
+            .collect::<Vec<_>>(),
+        )
+      },
+      false => |body_value: HashMap<String, Vec<&ConstValue>>, id: &Cow<str>| {
+        body_value
+          .get(id.as_ref())
+          .and_then(|a| a.first().cloned().cloned())
+          .unwrap_or(ConstValue::Null)
+      },
+    };
+    HttpDataLoader { client, batched, get_body_value: Arc::new(get_body_value) }
   }
 
   pub fn to_data_loader(self, batch: Batch) -> DataLoader<HttpDataLoader<C>, NoCache> {
@@ -67,22 +87,10 @@ impl<C: HttpClient + Send + Sync + 'static + Clone> Loader<DataLoaderRequest> fo
         let id = query_set
           .get(group_by.key())
           .ok_or(anyhow::anyhow!("Unable to find key {} in query params", group_by.key()))?;
-        let body_value_for_req = if self.is_list {
-          ConstValue::List(
-            body_value
-              .get(id.as_ref())
-              .unwrap_or(&Vec::new())
-              .iter()
-              .map(|&o| o.to_owned())
-              .collect::<Vec<_>>(),
-          )
-        } else {
-          body_value
-            .get(id.as_ref())
-            .and_then(|a| a.first().cloned().cloned())
-            .unwrap_or(ConstValue::Null)
-        };
-        hashmap.insert(key.clone(), res.clone().body(body_value_for_req));
+        hashmap.insert(
+          key.clone(),
+          res.clone().body((self.get_body_value)(body_value.clone(), id)),
+        );
       }
       Ok(hashmap)
     } else {
@@ -135,7 +143,7 @@ mod tests {
     let client =
       MockHttpClient { request_count: Arc::new(AtomicUsize::new(0)), requests: Arc::new(Mutex::new(Vec::new())) };
 
-    let loader = HttpDataLoader { client: client.clone(), batched: None, is_list: false };
+    let loader = HttpDataLoader::new(client.clone(), None, false);
     let loader = loader.to_data_loader(Batch::default().delay(1));
 
     let request = reqwest::Request::new(reqwest::Method::GET, "http://example.com".parse().unwrap());
@@ -154,7 +162,7 @@ mod tests {
     let client =
       MockHttpClient { request_count: Arc::new(AtomicUsize::new(0)), requests: Arc::new(Mutex::new(Vec::new())) };
 
-    let loader = HttpDataLoader { client: client.clone(), batched: None, is_list: false };
+    let loader = HttpDataLoader::new(client.clone(), None, false);
     let loader = loader.to_data_loader(Batch::default().delay(1));
 
     let request1 = reqwest::Request::new(reqwest::Method::GET, "http://example.com/1".parse().unwrap());
@@ -178,11 +186,7 @@ mod tests {
     let client =
       MockHttpClient { request_count: Arc::new(AtomicUsize::new(0)), requests: Arc::new(Mutex::new(Vec::new())) };
 
-    let loader = HttpDataLoader {
-      client: client.clone(),
-      batched: Some(GroupBy::new(vec!["userId".to_string()])),
-      is_list: false,
-    };
+    let loader = HttpDataLoader::new(client.clone(), Some(GroupBy::new(vec!["userId".to_string()])), false);
     let loader = loader.to_data_loader(Batch::default().delay(1));
 
     let request1 = reqwest::Request::new(reqwest::Method::GET, "http://example.com?userId=1".parse().unwrap());
@@ -209,11 +213,7 @@ mod tests {
     let client =
       MockHttpClient { request_count: Arc::new(AtomicUsize::new(0)), requests: Arc::new(Mutex::new(Vec::new())) };
 
-    let loader = HttpDataLoader {
-      client: client.clone(),
-      batched: Some(GroupBy::new(vec!["userId".to_string()])),
-      is_list: false,
-    };
+    let loader = HttpDataLoader::new(client.clone(), Some(GroupBy::new(vec!["userId".to_string()])), false);
     let loader = loader.to_data_loader(Batch::default().delay(1).max_size(1));
 
     let request1 = reqwest::Request::new(reqwest::Method::GET, "http://example.com?userId=1".parse().unwrap());
