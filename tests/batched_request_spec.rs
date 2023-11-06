@@ -54,7 +54,7 @@ mod integration_tests {
     let json = response.json::<Vec<Resp>>().await.unwrap();
     assert_eq!(json.len(), 2);
     assert_eq!(
-      json.get(0).unwrap().data.post.title,
+      json.first().unwrap().data.post.title,
       "sunt aut facere repellat provident occaecati excepturi optio reprehenderit"
     );
     assert_eq!(json.get(1).unwrap().data.post.title, "qui est esse");
