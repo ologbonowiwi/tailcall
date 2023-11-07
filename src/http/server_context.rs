@@ -4,17 +4,20 @@ use async_graphql::dynamic;
 use derive_setters::Setters;
 
 use crate::blueprint::{Blueprint, Definition};
-use crate::http::{DefaultHttpClient, HttpDataLoader};
+use crate::http::{DefaultHttpClient, HttpClient, HttpDataLoader};
 use crate::lambda::{Expression, Unsafe};
 
 #[derive(Setters, Clone)]
 pub struct ServerContext {
   pub schema: dynamic::Schema,
-  pub http_client: DefaultHttpClient,
+  pub http_client: Arc<dyn HttpClient + 'static + Send + Sync>,
   pub blueprint: Blueprint,
 }
 
-fn assign_data_loaders(blueprint: &mut Blueprint, http_client: DefaultHttpClient) -> &Blueprint {
+fn assign_data_loaders<'a>(
+  blueprint: &'a mut Blueprint,
+  http_client: Arc<dyn HttpClient + 'static + Send + Sync>,
+) -> &'a Blueprint {
   for def in blueprint.definitions.iter_mut() {
     if let Definition::ObjectTypeDefinition(def) = def {
       for field in &mut def.fields {
@@ -35,7 +38,7 @@ fn assign_data_loaders(blueprint: &mut Blueprint, http_client: DefaultHttpClient
 
 impl ServerContext {
   pub fn new(blueprint: Blueprint) -> Self {
-    let http_client = DefaultHttpClient::new(blueprint.upstream.clone());
+    let http_client = Arc::new(DefaultHttpClient::new(blueprint.upstream.clone()));
     let schema = assign_data_loaders(&mut blueprint.clone(), http_client.clone()).to_schema();
     ServerContext { schema, http_client, blueprint }
   }

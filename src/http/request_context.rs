@@ -6,10 +6,11 @@ use hyper::HeaderMap;
 use super::{DefaultHttpClient, Response, ServerContext};
 use crate::blueprint::Server;
 use crate::config::{self, Upstream};
+use crate::http::HttpClient;
 
 #[derive(Setters)]
 pub struct RequestContext {
-  pub http_client: DefaultHttpClient,
+  pub http_client: Arc<dyn HttpClient + 'static + Send + Sync>,
   pub server: Server,
   pub upstream: Upstream,
   pub req_headers: HeaderMap,
@@ -21,12 +22,12 @@ impl Default for RequestContext {
     let config = config::Config::default();
     //TODO: default is used only in tests. Drop default and move it to test.
     let server = Server::try_from(config.server.clone()).unwrap();
-    RequestContext::new(DefaultHttpClient::default(), server, config.upstream.clone())
+    RequestContext::new(Arc::new(DefaultHttpClient::default()), server, config.upstream.clone())
   }
 }
 
 impl RequestContext {
-  pub fn new(http_client: DefaultHttpClient, server: Server, upstream: Upstream) -> Self {
+  pub fn new(http_client: Arc<dyn HttpClient + 'static + Send + Sync>, server: Server, upstream: Upstream) -> Self {
     Self { req_headers: HeaderMap::new(), http_client, server, upstream, min_max_age: Arc::new(Mutex::new(None)) }
   }
 

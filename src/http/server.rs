@@ -8,10 +8,11 @@ use hyper::{Body, HeaderMap, Request, Response, StatusCode};
 
 use super::request_context::RequestContext;
 use super::ServerContext;
-use crate::async_graphql_hyper;
 use crate::blueprint::Blueprint;
 use crate::cli::CLIError;
 use crate::config::Config;
+use crate::http::{DefaultHttpClient, HttpClient};
+use crate::{async_graphql_hyper, http};
 
 fn graphiql() -> Result<Response<Body>> {
   Ok(Response::new(Body::from(
@@ -19,7 +20,7 @@ fn graphiql() -> Result<Response<Body>> {
   )))
 }
 
-async fn graphql_request(req: Request<Body>, server_ctx: &ServerContext) -> Result<Response<Body>> {
+pub async fn graphql_request(req: Request<Body>, server_ctx: &ServerContext) -> Result<Response<Body>> {
   let upstream = server_ctx.blueprint.upstream.clone();
   let allowed = upstream.get_allowed_headers();
   let headers = create_allowed_headers(req.headers(), &allowed);
