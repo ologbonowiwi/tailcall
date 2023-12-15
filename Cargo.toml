@@ -15,7 +15,6 @@ hyper-rustls = {version = "0.24.2", optional = true}
 rustls = {version = "0.21.9",optional = true}
 rustls-pemfile = {version = "1.0.4",optional = true}
 inquire = {version = "0.6.2",optional = true}
-lru = { version = "0.12.1" }
 
 #safe
 hyper = { version = "0.14", features = ["server"], default-features = false }
