@@ -69,27 +69,29 @@ impl ConfigReader {
 }
 #[cfg(test)]
 mod reader_tests {
+  use httpmock::MockServer;
   use tokio::io::AsyncReadExt;
 
   use crate::config::reader::ConfigReader;
   use crate::config::{Config, Type};
 
-  fn start_mock_server(port: u16) -> mockito::Server {
-    mockito::Server::new_with_port(port)
+  fn start_mock_server() -> MockServer {
+    MockServer::start()
   }
+
   #[tokio::test]
   async fn test_all() {
     let mut cfg = Config::default();
     cfg.schema.query = Some("Test".to_string());
     cfg = cfg.types([("Test", Type::default())].to_vec());
 
-    let mut server = start_mock_server(3080);
+    let server = start_mock_server();
+    let port = server.port();
     let header_serv = server
-      .mock("GET", "/")
-      .with_status(200)
-      .with_header("content-type", "application/graphql")
-      .with_body(cfg.to_sdl())
-      .create();
+      .mock(|when, then| {
+        when.method("GET").path("/");
+        then.status(200).header("content-type", "application/graphql").body(cfg.to_sdl());
+      });
     let mut json = String::new();
     tokio::fs::File::open("examples/jsonplaceholder.json")
       .await
@@ -98,15 +100,15 @@ mod reader_tests {
       .await
       .unwrap();
     let foo_json_serv = server
-      .mock("GET", "/foo.json")
-      .with_status(200)
-      .with_body(json)
-      .create();
+      .mock(|when, then| {
+        when.method("GET").path("/foo.json");
+        then.status(200).body(json);
+      });
 
     let files: Vec<String> = [
       "examples/jsonplaceholder.yml",   // config from local file
-      "http://localhost:3080/",         // with content-type header
-      "http://localhost:3080/foo.json", // with url extension
+      format!("http://localhost:{port}/").as_str(),         // with content-type header
+      format!("http://localhost:{port}/foo.json").as_str(), // with url extension
     ]
     .iter()
     .map(|x| x.to_string())
