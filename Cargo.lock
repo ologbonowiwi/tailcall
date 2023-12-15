@@ -3174,6 +3174,7 @@ dependencies = [
  "tokio",
  "url",
  "webbrowser",
+ "worker",
 ]
 
 [[package]]
@@ -3989,7 +3990,6 @@ dependencies = [
  "lazy_static",
  "serde_json",
  "tailcall",
- "tokio",
  "web-sys",
  "worker",
 ]
