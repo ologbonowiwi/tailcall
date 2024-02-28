@@ -25,13 +25,14 @@ impl<'a> ResolverContextLike<'a> for ResolverContextWithArgs<'a> {
     }
 
     fn args(&'a self) -> Option<IndexMap<Name, Value>> {
-        let mut args = self
-            .args
-            .iter()
-            .map(|(k, v)| (Name::new(k), Value::from(v.to_string())))
-            .collect::<IndexMap<Name, Value>>();
+        let mut args = self.source.args().unwrap_or_default();
 
-        self.source.args().map(|_args| args.extend(_args.clone()));
+        args.extend(
+            self.args
+                .iter()
+                .map(|(k, v)| (Name::new(k), Value::from(v.to_string())))
+                .collect::<IndexMap<Name, Value>>(),
+        );
 
         Some(args)
     }
