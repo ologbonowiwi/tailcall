@@ -181,13 +181,6 @@ impl<'a> ResolverContextLike<'a> for MockGraphqlContext {
         Some(TEST_ARGS.clone())
     }
 
-    fn with_args(
-        &'a self,
-        _: &'a HashMap<String, serde_json::Value>,
-    ) -> ResolverContextWithArgs<'a> {
-        unimplemented!("Not needed for this bench")
-    }
-
     fn field(&'a self) -> Option<SelectionField> {
         None
     }

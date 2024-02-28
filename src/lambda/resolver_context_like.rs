@@ -36,13 +36,6 @@ impl<'a> ResolverContextLike<'a> for ResolverContextWithArgs<'a> {
         Some(args)
     }
 
-    fn with_args(
-        &'a self,
-        args: &'a HashMap<String, serde_json::Value>,
-    ) -> ResolverContextWithArgs<'a> {
-        ResolverContextWithArgs::new(self, args)
-    }
-
     fn field(&'a self) -> Option<SelectionField> {
         self.source.field()
     }
@@ -58,7 +51,12 @@ pub trait ResolverContextLike<'a> {
     fn with_args(
         &'a self,
         args: &'a HashMap<String, serde_json::Value>,
-    ) -> ResolverContextWithArgs<'a>;
+    ) -> ResolverContextWithArgs<'a>
+    where
+        Self: Sized,
+    {
+        ResolverContextWithArgs::new(self, args)
+    }
     fn field(&'a self) -> Option<SelectionField>;
     fn add_error(&'a self, error: ServerError);
 }
@@ -72,13 +70,6 @@ impl<'a> ResolverContextLike<'a> for EmptyResolverContext {
 
     fn args(&'a self) -> Option<IndexMap<Name, Value>> {
         None
-    }
-
-    fn with_args(
-        &'a self,
-        args: &'a HashMap<String, serde_json::Value>,
-    ) -> ResolverContextWithArgs<'a> {
-        ResolverContextWithArgs::new(self, args)
     }
 
     fn field(&'a self) -> Option<SelectionField> {
@@ -95,13 +86,6 @@ impl<'a> ResolverContextLike<'a> for ResolverContext<'a> {
 
     fn args(&'a self) -> Option<IndexMap<Name, Value>> {
         Some(self.args.as_index_map().clone())
-    }
-
-    fn with_args(
-        &'a self,
-        args: &'a HashMap<String, serde_json::Value>,
-    ) -> ResolverContextWithArgs<'a> {
-        ResolverContextWithArgs::new(self, args)
     }
 
     fn field(&'a self) -> Option<SelectionField> {

@@ -172,7 +172,7 @@ fn compile(ctx: &CompilationContext, expr: ExprBody) -> Valid<Expression, String
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
 
     use pretty_assertions::assert_eq;
@@ -181,9 +181,7 @@ mod tests {
     use super::{compile, CompilationContext};
     use crate::config::{ConfigModule, Expr, Field, GraphQLOperationType};
     use crate::http::RequestContext;
-    use crate::lambda::{
-        Concurrent, Eval, EvaluationContext, ResolverContextLike, ResolverContextWithArgs,
-    };
+    use crate::lambda::{Concurrent, Eval, EvaluationContext, ResolverContextLike};
     use crate::valid::Validator;
 
     #[derive(Default)]
@@ -206,13 +204,6 @@ mod tests {
         ) -> Option<indexmap::IndexMap<async_graphql_value::Name, async_graphql_value::ConstValue>>
         {
             self.args.cloned()
-        }
-
-        fn with_args(
-            &'a self,
-            args: &'a HashMap<String, serde_json::Value>,
-        ) -> ResolverContextWithArgs<'a> {
-            ResolverContextWithArgs::new(self, args)
         }
 
         fn field(&'a self) -> Option<async_graphql::SelectionField> {

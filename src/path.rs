@@ -103,7 +103,7 @@ mod tests {
 
     mod evaluation_context {
         use std::borrow::Cow;
-        use std::collections::{BTreeMap, HashMap};
+        use std::collections::BTreeMap;
         use std::sync::Arc;
 
         use async_graphql::SelectionField;
@@ -114,7 +114,7 @@ mod tests {
         use once_cell::sync::Lazy;
 
         use crate::http::RequestContext;
-        use crate::lambda::{EvaluationContext, ResolverContextLike, ResolverContextWithArgs};
+        use crate::lambda::{EvaluationContext, ResolverContextLike};
         use crate::path::{PathGraphql, PathString};
         use crate::EnvIO;
 
@@ -198,13 +198,6 @@ mod tests {
 
             fn args(&'a self) -> Option<IndexMap<Name, Value>> {
                 Some(TEST_ARGS.clone())
-            }
-
-            fn with_args(
-                &'a self,
-                args: &'a HashMap<String, serde_json::Value>,
-            ) -> ResolverContextWithArgs<'a> {
-                ResolverContextWithArgs::new(self, args)
             }
 
             fn field(&'a self) -> Option<SelectionField> {
