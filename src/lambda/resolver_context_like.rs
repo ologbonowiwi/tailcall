@@ -10,15 +10,6 @@ pub struct ResolverContextWithArgs<'a> {
     args: &'a HashMap<String, serde_json::Value>,
 }
 
-impl<'a> ResolverContextWithArgs<'a> {
-    pub fn new(
-        source: &'a dyn ResolverContextLike<'a>,
-        args: &'a HashMap<String, serde_json::Value>,
-    ) -> Self {
-        ResolverContextWithArgs { source: Box::new(source), args }
-    }
-}
-
 impl<'a> ResolverContextLike<'a> for ResolverContextWithArgs<'a> {
     fn value(&'a self) -> Option<&Value> {
         self.source.value()
@@ -56,7 +47,7 @@ pub trait ResolverContextLike<'a> {
     where
         Self: Sized,
     {
-        ResolverContextWithArgs::new(self, args)
+        ResolverContextWithArgs { source: Box::new(self), args }
     }
     fn field(&'a self) -> Option<SelectionField>;
     fn add_error(&'a self, error: ServerError);
