@@ -1,12 +1,12 @@
-use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::time::Duration;
+use std::{borrow::Cow, collections::HashMap};
 
 use async_graphql::{SelectionField, ServerError, Value};
 use derive_setters::Setters;
 use reqwest::header::HeaderMap;
 
-use super::{GraphQLOperationContext, ResolverContextLike};
+use super::{GraphQLOperationContext, ResolverContextLike, ResolverContextWithArgs};
 use crate::http::RequestContext;
 
 // TODO: rename to ResolverContext
@@ -29,10 +29,26 @@ impl<'a, Ctx: ResolverContextLike<'a>> EvaluationContext<'a, Ctx> {
         self.graphql_ctx.value()
     }
 
-    pub fn arg<T: AsRef<str>>(&self, path: &[T]) -> Option<&'a Value> {
-        let arg = self.graphql_ctx.args()?.get(path[0].as_ref());
+    pub fn arg<T: AsRef<str>>(&self, path: &[T]) -> Option<Value> {
+        let args = self.graphql_ctx.args()?;
 
-        get_path_value(arg?, &path[1..])
+        args.get(path[0].as_ref()).cloned().map(|arg| {
+            let arg = arg.clone();
+
+            let path_value = get_path_value(&arg, &path[1..]);
+
+            path_value.cloned()
+        })?
+    }
+
+    pub fn with_args(&self, args: &'a HashMap<String, serde_json::Value>) -> Self {
+        let graphql_ctx: ResolverContextWithArgs<'a> = self.graphql_ctx.with_args(args);
+
+        EvaluationContext {
+            req_ctx: self.req_ctx,
+            graphql_ctx: &graphql_ctx,
+            timeout: self.timeout,
+        }
     }
 
     pub fn path_value<T: AsRef<str>>(&self, path: &[T]) -> Option<&'a Value> {

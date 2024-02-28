@@ -35,9 +35,9 @@ impl PathString for serde_json::Value {
     }
 }
 
-fn convert_value(value: &async_graphql::Value) -> Option<Cow<'_, str>> {
+fn convert_value(value: async_graphql::Value) -> Option<Cow<'static, str>> {
     match value {
-        async_graphql::Value::String(s) => Some(Cow::Borrowed(s.as_str())),
+        async_graphql::Value::String(s) => Some(Cow::Owned(s.to_string())),
         async_graphql::Value::Number(n) => Some(Cow::Owned(n.to_string())),
         async_graphql::Value::Boolean(b) => Some(Cow::Owned(b.to_string())),
         async_graphql::Value::Object(map) => Some(json!(map).to_string().into()),
@@ -56,7 +56,7 @@ impl<'a, Ctx: ResolverContextLike<'a>> PathString for EvaluationContext<'a, Ctx>
 
         if path.len() == 1 {
             return match path[0].as_ref() {
-                "value" => convert_value(ctx.path_value(&[] as &[T])?),
+                "value" => convert_value(ctx.path_value(&[] as &[T])?.clone()),
                 "args" => Some(json!(ctx.graphql_ctx.args()?).to_string().into()),
                 "vars" => Some(json!(ctx.vars()).to_string().into()),
                 _ => None,
@@ -65,8 +65,11 @@ impl<'a, Ctx: ResolverContextLike<'a>> PathString for EvaluationContext<'a, Ctx>
 
         path.split_first()
             .and_then(|(head, tail)| match head.as_ref() {
-                "value" => convert_value(ctx.path_value(tail)?),
-                "args" => convert_value(ctx.arg(tail)?),
+                "value" => convert_value(ctx.path_value(tail)?.clone()),
+                "args" => {
+                    let arg = ctx.arg(tail)?;
+                    convert_value(arg)
+                }
                 "headers" => ctx.header(tail[0].as_ref()).map(|v| v.into()),
                 "vars" => ctx.var(tail[0].as_ref()).map(|v| v.into()),
                 "env" => ctx.env_var(tail[0].as_ref()).map(|v| v.into()),
@@ -100,7 +103,7 @@ mod tests {
 
     mod evaluation_context {
         use std::borrow::Cow;
-        use std::collections::BTreeMap;
+        use std::collections::{BTreeMap, HashMap};
         use std::sync::Arc;
 
         use async_graphql::SelectionField;
@@ -111,7 +114,7 @@ mod tests {
         use once_cell::sync::Lazy;
 
         use crate::http::RequestContext;
-        use crate::lambda::{EvaluationContext, ResolverContextLike};
+        use crate::lambda::{EvaluationContext, ResolverContextLike, ResolverContextWithArgs};
         use crate::path::{PathGraphql, PathString};
         use crate::EnvIO;
 
@@ -193,8 +196,15 @@ mod tests {
                 Some(&TEST_VALUES)
             }
 
-            fn args(&'a self) -> Option<&'a IndexMap<Name, Value>> {
-                Some(&TEST_ARGS)
+            fn args(&'a self) -> Option<IndexMap<Name, Value>> {
+                Some(TEST_ARGS.clone())
+            }
+
+            fn with_args(
+                &'a self,
+                args: &'a HashMap<String, serde_json::Value>,
+            ) -> ResolverContextWithArgs<'a> {
+                ResolverContextWithArgs::new(self, args)
             }
 
             fn field(&'a self) -> Option<SelectionField> {

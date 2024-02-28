@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -18,7 +18,7 @@ use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use tailcall::blueprint::{Server, Upstream};
 use tailcall::cache::InMemoryCache;
 use tailcall::http::{RequestContext, Response};
-use tailcall::lambda::{EvaluationContext, ResolverContextLike};
+use tailcall::lambda::{EvaluationContext, ResolverContextLike, ResolverContextWithArgs};
 use tailcall::path::PathString;
 use tailcall::runtime::TargetRuntime;
 use tailcall::{EnvIO, FileIO, HttpIO};
@@ -177,8 +177,15 @@ impl<'a> ResolverContextLike<'a> for MockGraphqlContext {
         Some(&TEST_VALUES)
     }
 
-    fn args(&'a self) -> Option<&'a IndexMap<Name, Value>> {
-        Some(&TEST_ARGS)
+    fn args(&'a self) -> Option<IndexMap<Name, Value>> {
+        Some(TEST_ARGS.clone())
+    }
+
+    fn with_args(
+        &'a self,
+        _: &'a HashMap<String, serde_json::Value>,
+    ) -> ResolverContextWithArgs<'a> {
+        unimplemented!("Not needed for this bench")
     }
 
     fn field(&'a self) -> Option<SelectionField> {

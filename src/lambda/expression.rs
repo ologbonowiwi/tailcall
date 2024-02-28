@@ -1,9 +1,11 @@
 use core::future::Future;
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::pin::Pin;
 
 use anyhow::Result;
 use async_graphql_value::ConstValue;
+use serde_json::Value;
 use thiserror::Error;
 
 use super::list::List;
@@ -33,6 +35,10 @@ pub enum Expression {
 pub enum Context {
     Value,
     Path(Vec<String>),
+    CallWith {
+        args: HashMap<String, Value>,
+        expression: Box<Expression>,
+    },
 }
 
 #[derive(Debug, Error)]
@@ -98,6 +104,9 @@ impl Eval for Expression {
                         .path_value(path)
                         .cloned()
                         .unwrap_or(async_graphql::Value::Null)),
+                    Context::CallWith { args, expression } => {
+                        Ok(expression.eval(&ctx.with_args(args), conc).await?)
+                    }
                 },
                 Expression::Input(input, path) => {
                     let inp = &input.eval(ctx, conc).await?;
