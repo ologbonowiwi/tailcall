@@ -2,9 +2,10 @@
 source: tests/execution_spec.rs
 expression: client
 ---
+scalar Email
+
 type Query {
-  hello: String
-  hi: String
+  value(email: Email!): Email!
 }
 
 schema {

@@ -9,9 +9,7 @@ expression: response
   },
   "body": {
     "data": {
-      "bar": {
-        "id": 3
-      }
+      "value": "alo@valid.com"
     }
   }
 }
